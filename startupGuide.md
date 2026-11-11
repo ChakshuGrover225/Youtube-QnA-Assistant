@@ -1,10 +1,5 @@
 # ytchat - Startup Guide
 
-This guide takes you from nothing installed to chatting with your first YouTube
-video in about 10 minutes. You don't need to know how to program - you'll just
-copy a few commands into a terminal.
-
----
 
 ## What ytchat does
 
@@ -12,9 +7,7 @@ ytchat is a small program you run in a terminal. You give it a YouTube link and 
 
 1. Downloads the video's transcript (the captions).
 2. Shows you a short summary of the video.
-3. Lets you ask questions about the video, like "What were the three main tips?"
-   or "What did they say about pricing?". Answers come from what's actually said
-   in the video.
+3. Lets you ask questions about the video.
 
 It uses an AI model to do this. You choose which company's AI to use, and you
 use your own account with them:
@@ -25,41 +18,29 @@ use your own account with them:
 | **Anthropic** (Claude) | Paid, pay-as-you-go | An Anthropic account with credits and an API key |
 | **Ollama** | Free | The Ollama app on your own computer - no account or key |
 
-> An **API key** is like a password that lets ytchat use your account with an AI
-> provider. It stays on your computer and is only ever sent to that provider.
-
----
 
 ## What you need
 
 - A computer running Windows, macOS or Linux
 - An internet connection
 - The ytchat project folder (the folder that contains `pyproject.toml` and this guide).
-  If you received it as a `.zip` file, extract it first
-  (Windows: right-click → **Extract All**; macOS: double-click it).
 
----
 
 ## Step 1 - Open a terminal
 
 A terminal is a window where you type commands.
 
-- **Windows:** press the **Start** button, type `PowerShell`, and open **Windows PowerShell**
-  (or **Terminal**).
-- **macOS:** press `Cmd + Space`, type `Terminal`, and press Enter.
-- **Linux:** open your **Terminal** app (often `Ctrl + Alt + T`).
+| OS | what to open |
+|----|--------------|
+| **Windows:** | press the **Start** button, type `PowerShell`, and open **Windows PowerShell** (or **Terminal**). |
+|**macOS:** | press `Cmd + Space`, type `Terminal`, and press Enter.|
+|**Linux:**| open your **Terminal** app (often `Ctrl + Alt + T`).|
 
-Keep this window open for the next steps. To run a command: paste it in and press **Enter**.
 
-> **Pasting into a terminal:** Windows `Ctrl + V` or right-click · macOS `Cmd + V` ·
-> Linux `Ctrl + Shift + V`.
-
----
 
 ## Step 2 - Install uv
 
-ytchat is installed with a free tool called **uv**. It also sets up Python for you,
-so you don't need to install Python separately.
+Pre-requisite - Make sure you have python 3.13 or bigger installed
 
 **Windows** (in PowerShell):
 
@@ -99,18 +80,17 @@ cd "C:\Users\YourName\Downloads\video-summarisation-project"
 cd "$HOME/Downloads/video-summarisation-project"
 ```
 
-> **Tip:** type `cd ` (with a space), then drag the folder from File Explorer / Finder
-> into the terminal window - it fills in the path for you.
+
 
 Now install ytchat:
 
 ```sh
 uv tool install .
 ```
+When it's done you'll see `Installed 1 executable: ytchat`.
 
-(The `.` at the end matters - it means "this folder".) The first install takes a minute
-while it downloads what it needs. When it's done you'll see `Installed 1 executable: ytchat`.
 
+<br>
 Check it worked:
 
 ```sh
@@ -120,8 +100,8 @@ ytchat --version
 You should see `ytchat 0.1.0`. If you get "not recognized" or "command not found", run
 `uv tool update-shell`, close the terminal, open a new one, and try again.
 
-From now on, `ytchat` works **from any folder** - you don't need to `cd` into the project again.
-
+<h4>From now on, `ytchat` works from you computer - you don't need to `cd` into the project again.
+</h4>
 ---
 
 ## Step 4 - Get an API key (pick one option)
@@ -153,10 +133,7 @@ From now on, `ytchat` works **from any folder** - you don't need to `cd` into th
    `qwen3:0.6b` is small and fast but basic. If your computer has 8 GB+ of memory,
    `ollama pull llama3.2` gives better answers.
 
-Ollama models run on your own machine, so they're private and free, but slower and less
-capable than Groq or Claude - and very long videos may not fit.
 
----
 
 ## Step 5 - Start ytchat and add your key
 

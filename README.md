@@ -36,8 +36,8 @@ If your shell can't find it, run `uv tool update-shell` and open a new terminal.
 ```text
 $ ytchat
 YouTube link › /add-api-key
-Paste your Groq API key (input hidden, Enter to cancel):
-✓ Groq API key verified and saved (gsk_…ipOQ)
+Paste your Groq API key (Enter to cancel): gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxa1b2
+✓ Groq API key verified and saved (gsk_…a1b2)
 ✓ Ready: Groq · openai/gpt-oss-120b
 
 YouTube link › https://www.youtube.com/watch?v=jNQXAC9IVRw
@@ -60,7 +60,7 @@ You can also open a video straight away: `ytchat "https://youtu.be/VIDEO_ID"`
 
 | Command | What it does |
 |---|---|
-| `/add-api-key [vendor]` | Save your API key for the current vendor, or the one you name (`/add-api-key anthropic`). Input is hidden. The key is checked with the vendor first; a key the vendor rejects is **not** saved. |
+| `/add-api-key [vendor]` | Save your API key for the current vendor, or the one you name (`/add-api-key anthropic`). The key shows as you paste it; after that only a masked form (`gsk_…a1b2`) is displayed. The key is checked with the vendor first; a key the vendor rejects is **not** saved. |
 | `/change-model [name]` | Pick the model for the current vendor. Friendly names work: `opus 5.5` → `claude-opus-5-5`, `gpt-oss-20b` → `openai/gpt-oss-20b`, `qwen3:0.6B` → `qwen3:0.6b`. |
 | `/change-vendor [name]` | Switch between `anthropic`, `groq` and `ollama` (name or number). Each vendor remembers its own model and key. |
 | `/models` | List the models the current vendor offers (● marks the one in use). |

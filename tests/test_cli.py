@@ -109,6 +109,26 @@ def test_add_api_key_is_saved(fake_vendor):
     assert "gsk_valid_key_1234567890" not in out  # only the masked form is printed
 
 
+def test_api_key_stays_visible_while_pasting(fake_vendor, monkeypatch):
+    class Terminal(io.StringIO):
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(cli.sys, "stdin", Terminal())  # a real terminal, where input could be hidden
+    hidden = []
+    lines = ["/add-api-key", "gsk_visible_key_1234567890", "/exit"]
+    console = Console(file=io.StringIO(), width=120, color_system=None)
+
+    def fake_input(prompt="", password=False):
+        hidden.append(password)
+        return lines.pop(0)
+
+    console.input = fake_input
+    cli.App(console, Config()).run()
+    assert hidden == [False, False, False]
+    assert load_config().settings_for("groq").api_key == "gsk_visible_key_1234567890"
+
+
 def test_add_api_key_for_named_vendor(fake_vendor):
     _, saved = run("/add-api-key anthropic", "sk-ant-api03-abc-1234567", "/exit")
     assert saved.vendor == "groq"

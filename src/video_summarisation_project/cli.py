@@ -281,7 +281,7 @@ class App:
 
         if info.needs_key and not api_key_for(self.config, choice)[0]:
             self.console.print(f"No {info.label} API key saved yet [dim](create one at {info.key_url})[/].")
-            key = self._ask_secret(f"Paste your {info.label} API key (hidden), or press Enter to skip")
+            key = self._ask(f"Paste your {info.label} API key, or press Enter to skip")
             if not key:
                 self.console.print("[dim]Skipped. Add it later with /add-api-key.[/]")
                 return
@@ -304,7 +304,7 @@ class App:
             )
             return
         if not key:
-            key = self._ask_secret(f"Paste your {info.label} API key (input hidden, Enter to cancel)")
+            key = self._ask(f"Paste your {info.label} API key (Enter to cancel)")
             if not key:
                 self.console.print("[dim]Cancelled - no key saved.[/]")
                 return
@@ -413,14 +413,6 @@ class App:
     def _ask(self, label: str) -> str:
         try:
             return _clean(self.console.input(f"[bold]{label}:[/] "))
-        except (EOFError, KeyboardInterrupt):
-            self.console.print()
-            return ""
-
-    def _ask_secret(self, label: str) -> str:
-        try:
-            # Hide what's typed in a terminal; read plainly when input is piped (scripts, tests).
-            return _clean(self.console.input(f"[bold]{label}:[/] ", password=sys.stdin.isatty()))
         except (EOFError, KeyboardInterrupt):
             self.console.print()
             return ""

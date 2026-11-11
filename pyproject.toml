@@ -1,0 +1,33 @@
+[project]
+name = "video-summarisation-project"
+version = "0.1.0"
+description = "ytchat - chat with any YouTube video from your terminal, using Groq, Anthropic or Ollama."
+readme = "README.md"
+authors = [
+    { name = "Chakshu", email = "chakshugrover22502@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=2.8.0",
+    "groq>=1.7.0",
+    "httpx>=0.28.1",
+    "ollama>=0.6.3",
+    "pydantic>=2.14.3",
+    "rich>=15.0.0",
+    "youtube-transcript-api>=1.2.5",
+]
+
+[project.scripts]
+ytchat = "video_summarisation_project.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -348,3 +348,12 @@ uv tool uninstall video-summarisation-project
 ```
 
 This removes the program. Your settings file stays, so delete it too if you want everything gone.
+
+
+
+## Command i ran:
+
+1. Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+2. uv sync
+3. .\.venv\Scripts\activate
+4. -copy and create a new .env

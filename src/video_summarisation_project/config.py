@@ -95,6 +95,9 @@ class Config(BaseModel):
     # The vendor in use: /change-vendor.
     vendor: Vendor = "groq"
     vendors: VendorTable = Field(default_factory=VendorTable)
+    # Folder /save-transcript writes to: /change-files-save-path.
+    # None = the default, transcript_files.default_save_dir().
+    files_save_path: str | None = None
 
     # Advanced settings - edit the config file to change them.
     # 0 = focused and consistent, higher = more varied. Used by Groq and Ollama;
@@ -106,6 +109,9 @@ class Config(BaseModel):
     additional_prompt: str = ""
     # Preferred transcript languages, in priority order. If none exist, any is used.
     transcript_languages: list[str] = Field(default_factory=lambda: ["en"])
+    # Groq speech-to-text model for Instagram reels, which have no captions to fetch.
+    # Always Groq (with the Groq key), whatever the chat vendor is.
+    transcription_model: str = Field(default="whisper-large-v3-turbo", min_length=1)
 
     def settings_for(self, vendor: Vendor | None = None) -> VendorSettings:
         return getattr(self.vendors, vendor or self.vendor)

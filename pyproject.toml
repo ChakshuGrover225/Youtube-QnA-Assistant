@@ -1,7 +1,7 @@
 [project]
 name = "video-summarisation-project"
 version = "0.1.0"
-description = "ytchat - chat with any YouTube video from your terminal, using Groq, Anthropic or Ollama."
+description = "ytchat - chat with any YouTube video or Instagram Reel from your terminal, using Groq, Anthropic or Ollama."
 readme = "README.md"
 authors = [
     { name = "Chakshu", email = "chakshugrover22502@gmail.com" }
@@ -12,9 +12,11 @@ dependencies = [
     "groq>=1.7.0",
     "httpx>=0.28.1",
     "ollama>=0.6.3",
+    "prompt-toolkit>=3.0.53",
     "pydantic>=2.14.3",
     "rich>=15.0.0",
     "youtube-transcript-api>=1.2.5",
+    "yt-dlp>=2026.10.26",
 ]
 
 [project.scripts]
@@ -23,6 +25,10 @@ ytchat = "video_summarisation_project.cli:main"
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Transcripts saved with /save-transcript while running from source stay out of the package.
+source-exclude = ["saved-transcripts"]
 
 [dependency-groups]
 dev = [

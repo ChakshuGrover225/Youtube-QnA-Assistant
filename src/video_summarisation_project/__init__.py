@@ -1,4 +1,4 @@
-"""ytchat - chat with any YouTube video from your terminal."""
+"""ytchat - chat with any YouTube video or Instagram Reel from your terminal."""
 
 from importlib.metadata import PackageNotFoundError, version
 

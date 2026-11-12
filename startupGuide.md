@@ -3,9 +3,9 @@
 
 ## What ytchat does
 
-ytchat is a small program you run in a terminal. You give it a YouTube link and it:
+ytchat is a small program you run in a terminal. You give it a YouTube or Instagram Reel link and it:
 
-1. Downloads the video's transcript (the captions).
+1. Gets the video's transcript: a YouTube video's captions, or for a reel, it listens to the audio.
 2. Shows you a short summary of the video.
 3. Lets you ask questions about the video.
 
@@ -85,9 +85,12 @@ cd "$HOME/Downloads/video-summarisation-project"
 Now install ytchat:
 
 ```sh
-uv tool install .
+uv tool install . -c constraints.txt
 ```
 When it's done you'll see `Installed 1 executable: ytchat`.
+
+(`-c constraints.txt` installs the exact library versions this project was tested with,
+instead of whatever was published most recently.)
 
 
 <br>
@@ -148,14 +151,14 @@ You'll see a welcome box like this:
 ```text
 ┌─ ytchat v0.1.0 ───────────────────────────────────────────────────────────┐
 │                                                                           │
-│  Chat with any YouTube video.                                             │
+│  Chat with any YouTube video or Instagram Reel.                           │
 │  Vendor Groq · Model openai/gpt-oss-120b · no API key - run /add-api-key  │
 │                                                                           │
-│  Paste a YouTube link to start · /help for commands · /exit to quit       │
+│  Paste a YouTube or Instagram link · /help for commands · /exit to quit   │
 │                                                                           │
 └───────────────────────────────────────────────────────────────────────────┘
 
-YouTube link ›
+Video link ›
 ```
 
 ytchat starts out set up for **Groq**. Now follow the part that matches the option you picked in Step 4.
@@ -163,7 +166,7 @@ ytchat starts out set up for **Groq**. Now follow the part that matches the opti
 **If you picked Groq (Option A):** type `/add-api-key` and press Enter, then paste your key and press Enter.
 
 ```text
-YouTube link › /add-api-key
+Video link › /add-api-key
 Paste your Groq API key (input hidden, Enter to cancel):
 ✓ Groq API key verified and saved (gsk_…a1b2)
 ✓ Ready: Groq · openai/gpt-oss-120b
@@ -175,7 +178,7 @@ Paste your Groq API key (input hidden, Enter to cancel):
 **If you picked Anthropic (Option B):** switch to it, then paste your key when asked:
 
 ```text
-YouTube link › /change-vendor anthropic
+Video link › /change-vendor anthropic
 ✓ Vendor set to Anthropic · model claude-opus-5-5 (saved)
 No Anthropic API key saved yet (create one at https://platform.claude.com/settings/keys).
 Paste your Anthropic API key (hidden), or press Enter to skip:
@@ -187,7 +190,7 @@ Paste your Anthropic API key (hidden), or press Enter to skip:
 choose the model you downloaded:
 
 ```text
-YouTube link › /change-vendor ollama
+Video link › /change-vendor ollama
 ✓ Vendor set to Ollama · model qwen3:0.6b (saved)
 ✓ Ready: Ollama · qwen3:0.6b
 ```
@@ -204,14 +207,14 @@ You only do this step once. ytchat saves your choice and key, and remembers them
 1. Open a YouTube video in your browser and copy its link from the address bar.
    For a quick first test you can use this 19-second video:
    `https://www.youtube.com/watch?v=jNQXAC9IVRw`
-2. Paste the link at the `YouTube link ›` prompt and press Enter.
+2. Paste the link at the `Video link ›` prompt and press Enter.
 3. ytchat fetches the transcript and shows a summary.
 4. The prompt changes to `You ›`. Type any question about the video and press Enter.
    Ask as many follow-up questions as you like - it remembers the conversation.
 5. When you're done, type `/exit`.
 
 ```text
-YouTube link › https://www.youtube.com/watch?v=jNQXAC9IVRw
+Video link › https://www.youtube.com/watch?v=jNQXAC9IVRw
 ✓ Transcript fetched (39 words)
 ┌─ Video summary · jNQXAC9IVRw ─────────────────────────────────────┐
 │  TL;DR: A quick glimpse of elephants, highlighting their trunks.  │
@@ -249,12 +252,26 @@ ytchat "https://www.youtube.com/watch?v=VIDEO_ID"
 
 To switch to a different video, just paste a new link at the `You ›` prompt, or type `/new` first.
 
+### Instagram Reels
+
+Reel links work the same way - paste one like `https://www.instagram.com/reel/DflaaesxV7S/`.
+Two differences from YouTube:
+
+- **Reels need a Groq key, even if you chat with Anthropic or Ollama.** Reels have no
+  captions, so ytchat sends the reel's audio to Groq to turn the speech into text. If you
+  haven't added one yet, type `/add-api-key groq` and paste your Groq key (Step 4, Option A).
+- **Only public reels work.** If a reel only opens when you're logged in to Instagram,
+  ytchat can't open it. Reels with only music (no talking) can't be summarised either.
+
 ---
 
 ## Command cheat sheet
 
-Type these at the `YouTube link ›` or `You ›` prompt. Anything that doesn't start with
-`/` is treated as a question (or a YouTube link).
+Type these at the `Video link ›` or `You ›` prompt. Anything that doesn't start with
+`/` is treated as a question (or a YouTube or Instagram Reel link).
+
+You don't need to remember them: type `/` and the list appears. Keep typing to narrow it
+(`/s` shows only `/save-transcript`), press Tab to pick one, then Enter.
 
 | Command | What it does |
 |---|---|
@@ -264,6 +281,8 @@ Type these at the `YouTube link ›` or `You ›` prompt. Anything that doesn't 
 | `/change-model` | Switches the AI model, e.g. `/change-model opus 5.5` or `/change-model qwen3:0.6b`. |
 | `/models` | Lists the models your current provider offers. ● marks the one you're using. |
 | `/config` | Shows your current settings (keys are partly hidden) and where they're saved. |
+| `/save-transcript` | Saves the open video's summary and transcript to a text file, e.g. `job-search-in-norway-12-11-26.txt`. |
+| `/change-files-save-path` | Picks the folder `/save-transcript` saves to, e.g. `/change-files-save-path D:\Notes\ytchat`. |
 | `/new` | Closes the current video so you can open another. |
 | `/exit` | Ends the conversation and closes ytchat. `Ctrl + C` also works. |
 
@@ -309,7 +328,10 @@ wrong, and what to do (the line starting with `→`). The most common ones:
 | **Connection problem** - Couldn't reach Groq / Anthropic | No internet, or a VPN/proxy is in the way | Check your connection and try again |
 | **Limit reached** - too long / rate limit | Long videos can be too big for a model, and Groq's free tier limits how much you can send per minute | Wait a minute, try a shorter video, pick another model (`/models`), or switch provider |
 | **Can't do that** - Captions are turned off for this video | ytchat needs a video with captions | Try another video (auto-generated captions are fine) |
-| **Can't do that** - That's not a YouTube video link | What you typed isn't a video link (or no video is open yet) | Copy the full link from your browser's address bar |
+| **Can't do that** - That's not a YouTube or Instagram Reel link | What you typed isn't a video link (or no video is open yet) | Copy the full link from your browser's address bar |
+| **Setup problem** - Instagram reels are transcribed with Groq, but no Groq API key is saved | Reels need a Groq key, whichever provider you chat with | Type `/add-api-key groq` and paste your Groq key |
+| **Can't do that** - Instagram didn't return this reel | The reel is private, deleted, or only visible when logged in | Try a public reel - check it opens in a private (incognito) browser window |
+| **Can't do that** - There's too little speech in this reel to chat about | The reel is only music, or the talking is too short | Try another reel |
 | `ytchat` is "not recognized" / "command not found" | The terminal can't find ytchat yet | Run `uv tool update-shell`, then close and reopen the terminal |
 
 If a question fails, the conversation isn't lost - fix the problem and ask again.
@@ -338,7 +360,7 @@ If a question fails, the conversation isn't lost - fix the problem and ask again
 **Update** (after you get a newer copy of the project folder) - in a terminal, inside the project folder:
 
 ```sh
-uv tool install --reinstall .
+uv tool install --reinstall . -c constraints.txt
 ```
 
 **Uninstall:**

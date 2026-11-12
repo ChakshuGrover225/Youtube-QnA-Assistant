@@ -20,8 +20,11 @@ def extract_video_id(youtube_link: str) -> str | None:
     if "://" not in link:
         link = "https://" + link
 
-    parsed = urlparse(link)
-    host = (parsed.hostname or "").lower().removeprefix("www.")
+    try:
+        parsed = urlparse(link)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
+    except ValueError:  # e.g. the question "x[0]?" reads as a malformed IPv6 address
+        return None
     path_parts = [part for part in parsed.path.split("/") if part]
 
     if host == "youtu.be":

@@ -1,16 +1,18 @@
-"""ytchat: chat with any YouTube video from your terminal.
+"""ytchat: chat with any YouTube video or Instagram Reel from your terminal.
 
-Paste a YouTube link, get a summary, then ask questions answered from the
-video's transcript. Slash commands switch the LLM vendor, model and API key;
+Paste a YouTube or Instagram Reel link, get a summary, then ask questions
+answered from the video's transcript. Slash commands switch the LLM vendor, model and API key;
 every change is saved, so it sticks the next time you run ytchat.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from importlib.resources import files
 
 from rich.console import Console
@@ -22,8 +24,10 @@ from rich.table import Table
 from . import __version__
 from .config import VENDOR_INFO, VENDORS, Config, api_key_for, config_path, load_config, mask_key, save_config, vendor_for_key
 from .errors import AppError
-from .transcript import extract_video_id, fetch_transcript
-from . import vendors
+from .link_classifier import VideoLink, classify, get_transcript
+from .prompt_input import LineReader, terminal_reader
+from .safe_text import printable
+from . import transcript_files, vendors
 from .vendors import Backend, Reply, Turn, guess_vendor, normalize_model_name
 
 # name -> (usage, description)
@@ -34,6 +38,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "/change-vendor": ("/change-vendor [name]", "Switch the LLM vendor: anthropic, groq or ollama"),
     "/models": ("/models", "List the models the current vendor offers"),
     "/config": ("/config", "Show your settings and where they're saved"),
+    "/save-transcript": ("/save-transcript", "Save the video's summary and transcript to a text file"),
+    "/change-files-save-path": ("/change-files-save-path [folder]", "Pick the folder /save-transcript saves to"),
     "/new": ("/new", "Drop the current video and open another one"),
     "/exit": ("/exit", "End the conversation and quit"),
 }
@@ -47,6 +53,9 @@ _ERROR_TITLES = {
     "input": "Can't do that",
     "other": "Something went wrong",
 }
+
+
+_TRANSCRIPT_TAG = re.compile(r"<\s*/?\s*transcript\b[^>]*>", re.IGNORECASE)
 
 
 def _clean(text: str) -> str:
@@ -67,15 +76,25 @@ def print_error(console: Console, exc: AppError) -> None:
 
 @dataclass
 class Conversation:
-    video_id: str
+    video: VideoLink
     system: str
     turns: list[Turn] = field(default_factory=list)
+    transcript: str = ""
+    title: str | None = None  # the model's short title, once /save-transcript has asked for it
+
+    @property
+    def summary(self) -> str:
+        # turns[0] is the summary request; a Conversation is only kept once it has been answered.
+        return self.turns[1].text if len(self.turns) > 1 else ""
 
 
 class App:
-    def __init__(self, console: Console, config: Config) -> None:
+    def __init__(self, console: Console, config: Config, read_line: LineReader | None = None) -> None:
         self.console = console
         self.config = config
+        # Reads the main prompt: prompt_toolkit with command suggestions in a terminal,
+        # otherwise console.input. Smaller questions (_ask) always use console.input.
+        self.read_line = read_line
         self._backend: Backend | None = None  # built and checked lazily; reset by every settings change
         self.conversation: Conversation | None = None
         self._commands: dict[str, Callable[[str], None]] = {
@@ -85,6 +104,8 @@ class App:
             "/change-vendor": self.cmd_change_vendor,
             "/models": self.cmd_models,
             "/config": self.cmd_config,
+            "/save-transcript": self.cmd_save_transcript,
+            "/change-files-save-path": self.cmd_change_files_save_path,
             "/new": self.cmd_new,
         }
 
@@ -95,9 +116,9 @@ class App:
         if link:
             self.open_video(link)
         while True:
-            prompt = "[bold green]You ›[/] " if self.conversation else "[bold cyan]YouTube link ›[/] "
+            prompt = "[bold green]You ›[/] " if self.conversation else "[bold cyan]Video link ›[/] "
             try:
-                line = _clean(self.console.input("\n" + prompt))
+                line = _clean((self.read_line or self.console.input)("\n" + prompt))
             except (EOFError, KeyboardInterrupt):
                 self.console.print()
                 break
@@ -106,7 +127,7 @@ class App:
             if line.startswith("/"):
                 if not self.handle_command(line):
                     break
-            elif self.conversation is None or extract_video_id(line):
+            elif self.conversation is None or classify(line):
                 self.open_video(line)
             else:
                 self.ask(line)
@@ -141,20 +162,20 @@ class App:
 
     def open_video(self, link: str) -> None:
         try:
-            video_id = extract_video_id(link)
-            if video_id is None:
+            video = classify(link)
+            if video is None:
                 raise AppError(
-                    f"That's not a YouTube video link: {link}",
-                    "Paste a link like https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID. "
-                    "Type /help for commands.",
+                    f"That's not a YouTube or Instagram Reel link: {link}",
+                    "Paste a link like https://www.youtube.com/watch?v=VIDEO_ID, https://youtu.be/VIDEO_ID "
+                    "or https://www.instagram.com/reel/SHORTCODE/. Type /help for commands.",
                     kind="input",
                 )
             backend = self.backend()  # catch setup problems before downloading anything
-            with self.console.status(f"Fetching the transcript for [cyan]{video_id}[/]..."):
-                transcript = fetch_transcript(video_id, self.config.transcript_languages)
+            with self.console.status(f"Fetching the transcript for [cyan]{video.id}[/]...") as status:
+                transcript = get_transcript(video, self.config, lambda text: status.update(escape(text)))
             self.console.print(f"[green]✓[/] Transcript fetched [dim]({len(transcript.split()):,} words)[/]")
 
-            conversation = Conversation(video_id, self._system_prompt(transcript))
+            conversation = Conversation(video, self._system_prompt(transcript), transcript=transcript)
             reply = self._complete(
                 conversation, _prompt_text("summary_request.md"), f"Summarising with [magenta]{escape(backend.model)}[/]..."
             )
@@ -166,8 +187,9 @@ class App:
             return
 
         self.conversation = conversation
-        self._show_reply(reply, title=f"[bold]Video summary[/] [dim]· {video_id}[/]", border="cyan", padding=(1, 2))
-        self.console.rule("[bold]Ask anything about the video[/] [dim]· /help for commands · /exit to quit[/]")
+        noun = video.platform.noun
+        self._show_reply(reply, title=f"[bold]{noun.capitalize()} summary[/] [dim]· {video.id}[/]", border="cyan", padding=(1, 2))
+        self.console.rule(f"[bold]Ask anything about the {noun}[/] [dim]· /help for commands · /exit to quit[/]")
 
     def ask(self, question: str) -> None:
         assert self.conversation is not None
@@ -203,7 +225,10 @@ class App:
         prompt = _prompt_text("chat_system.md")
         if extra := self.config.additional_prompt.strip():
             prompt += f"\n\n## Additional instructions\n{extra}"
-        return f"{prompt}\n\n## Transcript\n{transcript}"
+        # Anyone can write a transcript, so it's fenced off as data (see chat_system.md). Tags inside
+        # it are removed, so it can't close the block early and add text that looks like ours.
+        transcript = _TRANSCRIPT_TAG.sub("", transcript).strip()
+        return f"{prompt}\n\n<transcript>\n{transcript}\n</transcript>"
 
     # --- Commands ---------------------------------------------------------
 
@@ -212,7 +237,9 @@ class App:
         for usage, description in COMMANDS.values():
             table.add_row(f"[bold cyan]{escape(usage)}[/]", description)
         self.console.print(Panel(table, title="[bold]Commands[/]", title_align="left", border_style="cyan"))
-        self.console.print("[dim]Anything else you type is a question about the current video, or a YouTube link to open.[/]")
+        self.console.print(
+            "[dim]Anything else you type is a question about the current video, or a YouTube or Instagram Reel link to open.[/]"
+        )
 
     def cmd_config(self, _arg: str) -> None:
         table = Table(box=None, padding=(0, 2), header_style="bold")
@@ -233,6 +260,12 @@ class App:
             f"[dim]● = in use · temperature {self.config.temperature} (Groq/Ollama) · max tokens {max_tokens} · "
             f"transcript languages {', '.join(self.config.transcript_languages)}[/]"
         )
+        self.console.print(
+            f"[dim]Instagram reels are transcribed with Groq · {escape(self.config.transcription_model)} (uses the Groq key)[/]"
+        )
+        self.console.print(
+            f"[dim]/save-transcript saves to {escape(str(transcript_files.save_dir(self.config)))} (/change-files-save-path)[/]"
+        )
         self.console.print(f"[dim]Saved in {escape(str(config_path()))}[/]")
 
     def cmd_models(self, _arg: str) -> None:
@@ -248,7 +281,7 @@ class App:
         table.add_column(f"{backend.label} models")
         table.add_column("", style="dim")
         for m in models:
-            table.add_row("[bold green]●[/]" if m.id.lower() == current else "", escape(m.id), escape(m.note))
+            table.add_row("[bold green]●[/]" if m.id.lower() == current else "", escape(printable(m.id)), escape(printable(m.note)))
         self.console.print(table)
         self.console.print("[dim]Switch with /change-model <name>[/]")
 
@@ -355,10 +388,50 @@ class App:
 
     def cmd_new(self, _arg: str) -> None:
         if self.conversation is None:
-            self.console.print("No video is open. Paste a YouTube link to start.")
+            self.console.print("No video is open. Paste a YouTube or Instagram Reel link to start.")
             return
         self.conversation = None
-        self.console.print("[dim]Closed the video. Paste another YouTube link.[/]")
+        self.console.print("[dim]Closed the video. Paste another link.[/]")
+
+    def cmd_save_transcript(self, _arg: str) -> None:
+        conversation = self.conversation
+        if conversation is None:
+            self.console.print("No video is open. Paste a YouTube or Instagram Reel link first, then /save-transcript.")
+            return
+        try:
+            title = self._file_title(conversation)
+        except KeyboardInterrupt:
+            self.console.print("[dim]Cancelled - nothing saved.[/]")
+            return
+        day = date.today()
+        text = transcript_files.render(title, conversation.video.url, day, conversation.summary, conversation.transcript)
+        path, written = transcript_files.save(
+            transcript_files.save_dir(self.config), transcript_files.file_stem(title, day), text
+        )
+        if written:
+            self.console.print(f"[green]✓[/] Transcript saved to [bold]{escape(str(path))}[/]")
+        else:
+            self.console.print(f"Already saved: [bold]{escape(str(path))}[/]")
+
+    def cmd_change_files_save_path(self, arg: str) -> None:
+        if not arg:
+            self.console.print(f"/save-transcript saves to [bold]{escape(str(transcript_files.save_dir(self.config)))}[/]")
+            arg = self._ask("New folder ('default' to reset, Enter to keep it)")
+            if not arg:
+                self.console.print("[dim]Folder not changed.[/]")
+                return
+        created = False
+        if arg.strip("'\" ").lower() == "default":
+            self.config.files_save_path = None
+        else:
+            folder, created = transcript_files.choose_folder(arg)
+            self.config.files_save_path = str(folder)
+        save_config(self.config)  # not _save(): the vendor doesn't need checking again
+        folder = transcript_files.save_dir(self.config)
+        self.console.print(
+            f"[green]✓[/] Transcripts will be saved to [bold]{escape(str(folder))}[/] "
+            f"[dim]({'folder created, ' if created else ''}saved)[/]"
+        )
 
     # --- Helpers ----------------------------------------------------------
 
@@ -396,6 +469,28 @@ class App:
         self.console.print(f"[green]✓[/] {info.label} API key {state} [dim]({mask_key(key)})[/]")
         return True
 
+    def _file_title(self, conversation: Conversation) -> str:
+        """A short title for the file name, written by the chat model from the summary.
+
+        Saving never depends on the model: if it can't be reached, the summary's first words are used.
+        """
+        if conversation.title:
+            return conversation.title
+        title = ""
+        try:
+            backend = self.backend()
+            with self.console.status(f"Naming the file with [magenta]{escape(backend.model)}[/]..."):
+                reply = backend.chat(_prompt_text("file_title.md"), [Turn("user", conversation.summary)])
+            title = transcript_files.clean_title(reply.text)
+        except AppError as exc:
+            self.console.print(f"[yellow]![/] Couldn't get a title from the model: {escape(exc.problem)}")
+        if title:
+            conversation.title = title
+            return title
+        self.console.print("[dim]Naming the file from the summary instead.[/]")
+        video = conversation.video
+        return transcript_files.title_from_summary(conversation.summary) or f"{video.platform.noun} {video.id}"
+
     def _verify(self) -> None:
         """Check the current vendor + model + key and say whether it's ready."""
         self._backend = None
@@ -422,12 +517,14 @@ class App:
 
     def _show_reply(self, reply: Reply, title: str, border: str, padding: tuple[int, int]) -> None:
         subtitle = f"[dim]{self._backend.vendor} · {escape(self._backend.model)}[/]" if self._backend else None
+        # The reply can be steered by the transcript, which anyone can write: strip control
+        # characters, and show every link's real address instead of only its text.
         self.console.print(
-            Panel(Markdown(reply.text), title=title, title_align="left", subtitle=subtitle,
+            Panel(Markdown(printable(reply.text), hyperlinks=False), title=title, title_align="left", subtitle=subtitle,
                   subtitle_align="right", border_style=border, padding=padding)
         )
         if reply.note:
-            self.console.print(f"[yellow]Note:[/] {escape(reply.note)}")
+            self.console.print(f"[yellow]Note:[/] {escape(printable(reply.note))}")
 
     def _banner(self) -> None:
         vendor = self.config.vendor
@@ -440,9 +537,9 @@ class App:
             key_text = "[red]no API key - run /add-api-key[/]"
         self.console.print(
             Panel(
-                "Chat with any YouTube video.\n"
+                "Chat with any YouTube video or Instagram Reel.\n"
                 f"[dim]Vendor[/] {info.label} · [dim]Model[/] {escape(settings.model)} · {key_text}\n\n"
-                "Paste a YouTube link to start · [cyan]/help[/] for commands · [cyan]/exit[/] to quit",
+                "Paste a YouTube or Instagram link · [cyan]/help[/] for commands · [cyan]/exit[/] to quit",
                 title=f"[bold]ytchat[/] [dim]v{__version__}[/]",
                 title_align="left",
                 border_style="cyan",
@@ -464,10 +561,10 @@ def main(argv: list[str] | None = None) -> int:
     _use_utf8_when_piped()
     parser = argparse.ArgumentParser(
         prog="ytchat",
-        description="Chat with any YouTube video from your terminal, using Groq, Anthropic or Ollama.",
+        description="Chat with any YouTube video or Instagram Reel from your terminal, using Groq, Anthropic or Ollama.",
         epilog="Inside ytchat, type /help to see the commands.",
     )
-    parser.add_argument("link", nargs="?", help="YouTube link to open straight away (quote it)")
+    parser.add_argument("link", nargs="?", help="YouTube or Instagram Reel link to open straight away (quote it)")
     parser.add_argument("--version", action="version", version=f"ytchat {__version__}")
     args = parser.parse_args(argv)
 
@@ -477,4 +574,4 @@ def main(argv: list[str] | None = None) -> int:
     except AppError as exc:
         print_error(console, exc)
         return 1
-    return App(console, config).run(args.link)
+    return App(console, config, terminal_reader(console, COMMANDS)).run(args.link)

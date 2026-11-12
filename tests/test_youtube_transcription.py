@@ -1,6 +1,6 @@
 import pytest
 
-from video_summarisation_project.transcript import extract_video_id
+from video_summarisation_project.youtube_transcription import extract_video_id
 
 
 @pytest.mark.parametrize(
@@ -22,7 +22,10 @@ def test_valid_links(link):
 
 @pytest.mark.parametrize(
     "text",
-    ["", "hello there", "What is this video about?", "https://vimeo.com/123", "https://youtube.com/watch?v=short", "https://youtube.com/"],
+    [
+        "", "hello there", "What is this video about?", "https://vimeo.com/123", "https://youtube.com/watch?v=short", "https://youtube.com/",
+        "https://notyoutube.com/watch?v=jNQXAC9IVRw", "x[0]?", "a[b",  # brackets used to crash urlparse
+    ],
 )
 def test_not_links(text):
     assert extract_video_id(text) is None
